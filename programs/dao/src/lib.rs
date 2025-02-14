@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 
-declare_id!("HMmdKEJsaYK5fj5uDxoZzSyY7ijgufAFUujZHLzdUqAK");
+declare_id!("5uSrczZqWvJkWRttNiCNRiVwCrTnNvWPttuHFDFdAWkY");
 
 #[program]
-pub mod sol_dao {
+pub mod dao {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {

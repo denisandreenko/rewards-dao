@@ -5,7 +5,9 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-sol_dao = "HMmdKEJsaYK5fj5uDxoZzSyY7ijgufAFUujZHLzdUqAK"
+dao = "5uSrczZqWvJkWRttNiCNRiVwCrTnNvWPttuHFDFdAWkY"
+rewards = "DzGDD34981LzJKkL3U4okU4wRfCk6P3PUnK5MLzj4sxy"
+transfer_hook = "6XKBE5pgMA4GkhoFYcJNNfhhFnmm26qPLLhXhBHuBjas"
 
 [registry]
 url = "https://api.apr.dev"
