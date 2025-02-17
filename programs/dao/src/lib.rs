@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("5uSrczZqWvJkWRttNiCNRiVwCrTnNvWPttuHFDFdAWkY");
+declare_id!("44dqWPQqXs2TJ1DLDUBvpmLQz3NDBVgFsT5nZ5KkPoT5");
 
 #[program]
 pub mod dao {
