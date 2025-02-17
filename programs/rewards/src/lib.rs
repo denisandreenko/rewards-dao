@@ -1,45 +1,42 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    metadata::{
-        create_metadata_accounts_v3, mpl_token_metadata::types::DataV2, CreateMetadataAccountsV3,
-        Metadata as Metaplex,
-    },
-    token::{mint_to, Mint, MintTo, Token, TokenAccount},
-};
+use anchor_spl::token_interface::{Mint as Mint2022, TokenInterface, TokenMetadataInitialize};
 
-declare_id!("DzGDD34981LzJKkL3U4okU4wRfCk6P3PUnK5MLzj4sxy");
+pub mod utils;
+pub use utils::*;
+
+declare_id!("6NYSjPnBM6zH4VSxcMqUgGohHt9ggQpinetq1zi89dvw");
 
 #[program]
 pub mod rewards {
+    use anchor_spl::token_interface;
     use super::*;
 
     pub fn initialize_token(_ctx: Context<InitToken>, metadata: InitTokenParams) -> Result<()> {
-        let seeds = &["mint".as_bytes(), &[_ctx.bumps.mint]];
-        let signer = [&seeds[..]];
-        let token_data: DataV2 = DataV2 {
-            name: metadata.name,
-            symbol: metadata.symbol,
-            uri: metadata.uri,
-            seller_fee_basis_points: 0,
-            creators: None,
-            collection: None,
-            uses: None,
+        let cpi_accounts = TokenMetadataInitialize {
+            token_program_id: _ctx.accounts.token_program.to_account_info(),
+            mint: _ctx.accounts.mint.to_account_info(),
+            metadata: _ctx.accounts.mint.to_account_info(), 
+            mint_authority: _ctx.accounts.payer.to_account_info(),
+            update_authority: _ctx.accounts.payer.to_account_info(),
         };
-        let metadata_ctx = CpiContext::new_with_signer(
-            _ctx.accounts.token_metadata_program.to_account_info(),
-            CreateMetadataAccountsV3 {
-                payer: _ctx.accounts.payer.to_account_info(), // owner address
-                update_authority: _ctx.accounts.mint.to_account_info(),
-                mint: _ctx.accounts.mint.to_account_info(), // owner address
-                metadata: _ctx.accounts.metadata.to_account_info(),
-                mint_authority: _ctx.accounts.mint.to_account_info(), // owner address
-                system_program: _ctx.accounts.system_program.to_account_info(),
-                rent: _ctx.accounts.rent.to_account_info(),
-            },
-            &signer,
-        );
-        create_metadata_accounts_v3(metadata_ctx, token_data, false, true, None)?;
+        let cpi_program = _ctx.accounts.token_program.to_account_info();
+        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+
+        token_interface::token_metadata_initialize(
+            cpi_context,
+            metadata.name,
+            metadata.symbol,
+            metadata.uri,
+        )?;
+
+        _ctx.accounts.mint.reload()?;
+        // transfer minimum rent to mint account
+        update_account_lamports_to_minimum_balance(
+            _ctx.accounts.mint.to_account_info(),
+            _ctx.accounts.payer.to_account_info(),
+            _ctx.accounts.system_program.to_account_info(),
+        )?;
+
         msg!("Token mint created successfully.");
         Ok(())
     }
@@ -48,24 +45,24 @@ pub mod rewards {
 #[derive(Accounts)]
 #[instruction(params: InitTokenParams)]
 pub struct InitToken<'info> {
-    #[account(mut)] 
-    /// CHECK: UncheckedAccount
-    pub metadata: UncheckedAccount<'info>,
-    #[account(
-        init,
-        seeds = [b"mint"],
-        bump,
-        payer = payer, 
-        mint::decimals = params.decimals,
-        mint::authority = mint,
-    )]
-    pub mint: Account<'info, Mint>,
     #[account(mut)]
     pub payer: Signer<'info>,
-    pub rent: Sysvar<'info, Rent>,
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"mint"],
+        bump,
+        mint::decimals = params.decimals,
+        mint::authority = payer,
+        mint::token_program = token_program,
+        extensions::metadata_pointer::authority = payer,
+        extensions::metadata_pointer::metadata_address = mint,
+        extensions::transfer_hook::authority = payer,
+        extensions::transfer_hook::program_id = transfer_hook::ID,
+    )]
+    pub mint: Box<InterfaceAccount<'info, Mint2022>>,
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
-    pub token_metadata_program: Program<'info, Metaplex>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone)]
