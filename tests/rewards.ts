@@ -23,7 +23,9 @@ describe("Rewards Test", () => {
   }
 
   const payer = program.provider.publicKey;
+
   const mintAmount = 10;
+  const burnAmount = 5;
 
   const [mint] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("mint")],
@@ -82,6 +84,52 @@ describe("Rewards Test", () => {
       initialBalance + mintAmount,
       postBalance,
       "Compare balances, it must be equal"
+    );
+  });
+
+  it("Burn tokens", async () => {
+    const from_ata = await anchor.utils.token.associatedAddress({
+      mint: mint,
+      owner: payer,
+    });
+    const balance = await program.provider.connection.getTokenAccountBalance(from_ata);
+    const initialBalance = balance.value.uiAmount;
+    const supply = await program.provider.connection.getTokenSupply(mint);
+    const initialSupply = supply.value.uiAmount;
+    const context = {
+      mint,
+      from_ata,
+      payer,
+      rent: web3.SYSVAR_RENT_PUBKEY,
+      systemProgram: web3.SystemProgram.programId,
+      tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+      associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+    };
+
+    const txHash = await program.methods
+      .burnTokens(new anchor.BN(burnAmount * 10 ** metadata.decimals))
+      .accounts(context)
+      .rpc();
+
+    await program.provider.connection.confirmTransaction(txHash);
+    console.log(`  https://explorer.solana.com/tx/${txHash}?cluster=devnet`);
+
+    const postBalance = (
+      await program.provider.connection.getTokenAccountBalance(from_ata)
+    ).value.uiAmount;
+    assert.equal(
+      initialBalance - burnAmount,
+      postBalance,
+      "Compare balances, it must be equal"
+    );
+    
+    const postSupply = (
+      await program.provider.connection.getTokenSupply(mint)
+    ).value.uiAmount;
+    assert.equal(
+      initialSupply - burnAmount,
+      postSupply,
+      "Compare token supply, it must be equal"
     );
   });
 });

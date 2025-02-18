@@ -58,6 +58,10 @@ pub mod rewards {
         )?;
         Ok(())
     }
+
+    pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+        _burn_tokens(ctx, amount)
+    }
 }
 
 #[derive(Accounts)]
