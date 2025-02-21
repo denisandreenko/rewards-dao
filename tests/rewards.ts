@@ -3,7 +3,7 @@ import assert from "assert";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Rewards } from "../target/types/rewards";
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token"
+import { TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token"
 import { sendAndConfirmTransaction } from "@solana/web3.js";
 import * as web3 from "@solana/web3.js";
 
@@ -28,7 +28,7 @@ describe("Rewards Test", () => {
   const burnAmount = 5;
 
   const [mint] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("mint")],
+    [Buffer.from("token-2022")],
     program.programId
   );
 
@@ -50,10 +50,13 @@ describe("Rewards Test", () => {
   });
 
   it("mint tokens", async () => {
-    const destination = await anchor.utils.token.associatedAddress({
-      mint: mint,
-      owner: payer,
-    });
+    const destination = getAssociatedTokenAddressSync(
+      mint,
+      payer,
+      false, // owner is NOT a PDA
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
     let initialBalance: number;
     try {
       const balance = await program.provider.connection.getTokenAccountBalance(destination);
@@ -63,13 +66,12 @@ describe("Rewards Test", () => {
       initialBalance = 0;
     }
     const context = {
+      payer,
       mint,
       destination,
-      payer,
-      rent: web3.SYSVAR_RENT_PUBKEY,
       systemProgram: web3.SystemProgram.programId,
-      tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
-      associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     };
     const txHash = await program.methods
       .mintTokens(new anchor.BN(mintAmount * 10 ** metadata.decimals))
@@ -88,22 +90,24 @@ describe("Rewards Test", () => {
   });
 
   it("Burn tokens", async () => {
-    const from_ata = await anchor.utils.token.associatedAddress({
-      mint: mint,
-      owner: payer,
-    });
+    const from_ata = getAssociatedTokenAddressSync(
+      mint,
+      payer,
+      false, // owner is NOT a PDA
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
     const balance = await program.provider.connection.getTokenAccountBalance(from_ata);
     const initialBalance = balance.value.uiAmount;
     const supply = await program.provider.connection.getTokenSupply(mint);
     const initialSupply = supply.value.uiAmount;
     const context = {
+      payer,
       mint,
       from_ata,
-      payer,
-      rent: web3.SYSVAR_RENT_PUBKEY,
       systemProgram: web3.SystemProgram.programId,
-      tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
-      associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     };
 
     const txHash = await program.methods
@@ -122,7 +126,7 @@ describe("Rewards Test", () => {
       postBalance,
       "Compare balances, it must be equal"
     );
-    
+
     const postSupply = (
       await program.provider.connection.getTokenSupply(mint)
     ).value.uiAmount;
