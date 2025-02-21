@@ -1,8 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint as Mint2022, TokenInterface, TokenMetadataInitialize};
+use anchor_spl::token_interface::{Mint as Mint2022, TokenInterface, TokenAccount, TokenMetadataInitialize, MintTo};
+use anchor_spl::associated_token::AssociatedToken;
 
 pub mod utils;
 pub use utils::*;
+pub mod instructions;
+pub use instructions::*;
+pub mod constants;
+pub use constants::*;
 
 declare_id!("6NYSjPnBM6zH4VSxcMqUgGohHt9ggQpinetq1zi89dvw");
 
@@ -41,21 +46,17 @@ pub mod rewards {
         Ok(())
     }
 
-    pub fn mint_tokens(ctx: Context<MintTokens>, quantity: u64) -> Result<()> {
-        let seeds = &["mint".as_bytes(), &[ctx.bumps.mint]];
-        let signer = [&seeds[..]];
-        mint_to(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                MintTo {
-                    authority: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.destination.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                },
-                &signer,
-            ),
-            quantity,
-        )?;
+    pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        let mut cpi_accounts = MintTo {
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.to_ata.to_account_info(),
+            authority: ctx.accounts.payer.to_account_info(),
+        };
+    
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+    
+        token_interface::mint_to(cpi_context, amount)?;
         Ok(())
     }
 
@@ -72,7 +73,7 @@ pub struct InitToken<'info> {
     #[account(
         init,
         payer = payer,
-        seeds = [b"mint"],
+        seeds = [TOKEN_2022_SEED],
         bump,
         mint::decimals = params.decimals,
         mint::authority = payer,
@@ -89,25 +90,24 @@ pub struct InitToken<'info> {
 
 #[derive(Accounts)]
 pub struct MintTokens<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
     #[account(
         mut,
-        seeds = [b"mint"],
+        seeds = [TOKEN_2022_SEED],
         bump,
-        mint::authority = mint,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<InterfaceAccount<'info, Mint2022>>,
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = mint,
         associated_token::authority = payer,
+        associated_token::token_program = token_program,
     )]
-    pub destination: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub rent: Sysvar<'info, Rent>, // fee to hold accounts in this program (autocalculated)
+    pub to_ata: InterfaceAccount<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
