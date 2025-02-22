@@ -22,6 +22,21 @@ use anchor_spl::{
     },
 };
 
+pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
+    // Transfer USDC to the specified account  
+    let cpi_accounts = token_interface::TransferChecked {
+        mint: ctx.accounts.usdc_mint.to_account_info(),
+        from: ctx.accounts.usdc_from_ata.to_account_info(),  
+        to: ctx.accounts.usdc_keeper.to_account_info(),  
+        authority: ctx.accounts.signer.to_account_info(),  
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+
+    token_interface::transfer_checked(cpi_context, amount, 6)?;
+    Ok(())
+}
+
 pub fn _mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
     let mut cpi_accounts = MintTo {
         mint: ctx.accounts.mint.to_account_info(),

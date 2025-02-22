@@ -11,7 +11,6 @@ use anchor_spl::{
         self,
         Mint as Mint2022,
         TokenAccount as TokenAccount2022,
-        TransferChecked,
         TokenInterface,
         TokenMetadataInitialize
     },
@@ -64,16 +63,7 @@ pub mod rewards {
         // USDC - 6 decimals | SP - 6 decimals
         let usdc_amount = amount / 10; // 1 USDC for 10 tokens
 
-        // Transfer USDC to the specified account  
-        let cpi_accounts = token::Transfer {  
-            from: ctx.accounts.usdc_from_ata.to_account_info(),  
-            to: ctx.accounts.usdc_keeper.to_account_info(),  
-            authority: ctx.accounts.signer.to_account_info(),  
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
-
-        token::transfer(cpi_context, usdc_amount)?;
+        _charge_usdc(&ctx, usdc_amount)?;
         
         _mint_tokens(ctx, amount)
     }
