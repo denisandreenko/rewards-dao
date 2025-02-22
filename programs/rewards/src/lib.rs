@@ -1,6 +1,21 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint as Mint2022, TokenInterface, TokenAccount, TokenMetadataInitialize};
-use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{
+        self,
+        Mint,
+        Token,
+        TokenAccount,
+    },
+    token_interface::{
+        self,
+        Mint as Mint2022,
+        TokenAccount as TokenAccount2022,
+        TransferChecked,
+        TokenInterface,
+        TokenMetadataInitialize
+    },
+};
 
 pub mod utils;
 pub use utils::*;
@@ -18,13 +33,13 @@ pub mod rewards {
 
     pub fn initialize_token(_ctx: Context<InitToken>, metadata: InitTokenParams) -> Result<()> {
         let cpi_accounts = TokenMetadataInitialize {
-            token_program_id: _ctx.accounts.token_program.to_account_info(),
+            token_program_id: _ctx.accounts.token_program2022.to_account_info(),
             mint: _ctx.accounts.mint.to_account_info(),
             metadata: _ctx.accounts.mint.to_account_info(), 
             mint_authority: _ctx.accounts.payer.to_account_info(),
             update_authority: _ctx.accounts.payer.to_account_info(),
         };
-        let cpi_program = _ctx.accounts.token_program.to_account_info();
+        let cpi_program = _ctx.accounts.token_program2022.to_account_info();
         let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
 
         token_interface::token_metadata_initialize(
@@ -42,11 +57,24 @@ pub mod rewards {
             _ctx.accounts.system_program.to_account_info(),
         )?;
 
-        msg!("Token mint created successfully.");
         Ok(())
     }
 
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        // USDC - 6 decimals | SP - 6 decimals
+        let usdc_amount = amount / 10; // 1 USDC for 10 tokens
+
+        // Transfer USDC to the specified account  
+        let cpi_accounts = token::Transfer {  
+            from: ctx.accounts.usdc_from_ata.to_account_info(),  
+            to: ctx.accounts.usdc_keeper.to_account_info(),  
+            authority: ctx.accounts.signer.to_account_info(),  
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+
+        token::transfer(cpi_context, usdc_amount)?;
+        
         _mint_tokens(ctx, amount)
     }
 
@@ -59,23 +87,43 @@ pub mod rewards {
 #[instruction(params: InitTokenParams)]
 pub struct InitToken<'info> {
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub signer: Signer<'info>,
+
     #[account(
         init,
-        payer = payer,
+        payer = signer,
         seeds = [TOKEN_2022_SEED],
         bump,
         mint::decimals = params.decimals,
         mint::authority = payer,
-        mint::token_program = token_program,
+        mint::token_program = token_program2022,
         extensions::metadata_pointer::authority = payer,
         extensions::metadata_pointer::metadata_address = mint,
         extensions::transfer_hook::authority = payer,
         extensions::transfer_hook::program_id = transfer_hook::ID,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,
+
+    #[account(
+        address = USDC_MINT_ADDRESS_DEVNET,
+        mint::token_program = token_program,
+    )]
+    pub usdc_mint: Account<'info, Mint>,
+
+    #[account(
+        init,
+        seeds = [USDC_SEED],
+        bump,
+        payer = signer,
+        token::mint = usdc_mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub usdc_keeper: Account<'info, TokenAccount>,
+
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
+    pub token_program2022: Interface<'info, TokenInterface>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone)]
