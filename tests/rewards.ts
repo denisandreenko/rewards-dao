@@ -149,43 +149,65 @@ describe("Rewards Test", () => {
   });
 
   it("Burn tokens", async () => {
-    const balance = await program.provider.connection.getTokenAccountBalance(payerATA);
-    const initialBalance = balance.value.uiAmount;
-    const supply = await program.provider.connection.getTokenSupply(mint);
-    const initialSupply = supply.value.uiAmount;
-    const context = {
-      payer,
-      mint,
-      payerATA,
-      systemProgram: web3.SystemProgram.programId,
-      tokenProgram: TOKEN_2022_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-    };
+    const usdcToAta = await anchor.utils.token.associatedAddress({
+      mint: usdcMint,
+      owner: wallet.publicKey,
+    });
 
-    const txHash = await program.methods
+    const initialSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const initialSupply = (await connection.getTokenSupply(mint)).value.uiAmount;
+    const usdcFromBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
+    const usdcToBalance = (await connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
+
+    const tx = new anchor.web3.Transaction();
+
+    const ix = await program.methods
       .burnTokens(new anchor.BN(burnAmount * 10 ** metadata.decimals))
-      .accounts(context)
-      .rpc();
+      .accountsStrict({
+        signer: wallet.publicKey,
+        mint,
+        usdcMint,
+        usdcKeeper,
+        fromAta: payerATA,
+        usdcToAta,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID
+      })
+      .instruction();
 
-    await program.provider.connection.confirmTransaction(txHash);
-    console.log(`  https://explorer.solana.com/tx/${txHash}?cluster=devnet`);
+    tx.add(ix);
 
-    const postBalance = (
-      await program.provider.connection.getTokenAccountBalance(payerATA)
-    ).value.uiAmount;
+    const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
+    console.log("Signature", sig);
+
+    const postSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
-      initialBalance - burnAmount,
-      postBalance,
-      "Compare balances, it must be equal"
+      initialSpreeBalance - burnAmount,
+      postSpreeBalance,
+      "Compare SP balances, it must be equal"
     );
 
-    const postSupply = (
-      await program.provider.connection.getTokenSupply(mint)
-    ).value.uiAmount;
+    const postSupply = (await connection.getTokenSupply(mint)).value.uiAmount;
     assert.equal(
       initialSupply - burnAmount,
       postSupply,
-      "Compare token supply, it must be equal"
+      "Compare SP token supply, it must be equal"
+    );
+
+    const usdcFromPostBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
+    assert.equal(
+      usdcFromBalance - (burnAmount / 10), // 1 USDC = 10 SP
+      usdcFromPostBalance,
+      "Compare USDC storage post balances, it must be equal"
+    );
+
+    const usdcToPostBalance = (await program.provider.connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
+    assert.equal(
+      usdcToBalance + (burnAmount / 10), // 1 USDC = 10 SP
+      usdcToPostBalance,
+      "Compare USDC To post balances, it must be equal"
     );
   });
 });
