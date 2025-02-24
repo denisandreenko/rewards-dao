@@ -35,8 +35,8 @@ pub mod rewards {
             token_program_id: _ctx.accounts.token_program2022.to_account_info(),
             mint: _ctx.accounts.mint.to_account_info(),
             metadata: _ctx.accounts.mint.to_account_info(), 
-            mint_authority: _ctx.accounts.payer.to_account_info(),
-            update_authority: _ctx.accounts.payer.to_account_info(),
+            mint_authority: _ctx.accounts.signer.to_account_info(),
+            update_authority: _ctx.accounts.signer.to_account_info(),
         };
         let cpi_program = _ctx.accounts.token_program2022.to_account_info();
         let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
@@ -52,7 +52,7 @@ pub mod rewards {
         // transfer minimum rent to mint account
         update_account_lamports_to_minimum_balance(
             _ctx.accounts.mint.to_account_info(),
-            _ctx.accounts.payer.to_account_info(),
+            _ctx.accounts.signer.to_account_info(),
             _ctx.accounts.system_program.to_account_info(),
         )?;
 
@@ -85,11 +85,11 @@ pub struct InitToken<'info> {
         seeds = [TOKEN_2022_SEED],
         bump,
         mint::decimals = params.decimals,
-        mint::authority = payer,
+        mint::authority = signer,
         mint::token_program = token_program2022,
-        extensions::metadata_pointer::authority = payer,
+        extensions::metadata_pointer::authority = signer,
         extensions::metadata_pointer::metadata_address = mint,
-        extensions::transfer_hook::authority = payer,
+        extensions::transfer_hook::authority = signer,
         extensions::transfer_hook::program_id = transfer_hook::ID,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,

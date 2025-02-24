@@ -2449,6 +2449,14 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "mpl-token-metadata 3.2.3",
+ "sha2-const",
+ "solana-program",
+ "spl-pod",
+ "spl-tlv-account-resolution",
+ "spl-token-metadata-interface",
+ "spl-transfer-hook-interface",
+ "spl-type-length-value",
 ]
 
 [[package]]

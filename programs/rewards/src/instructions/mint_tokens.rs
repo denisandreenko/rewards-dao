@@ -28,7 +28,7 @@ pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
         mint: ctx.accounts.usdc_mint.to_account_info(),
         from: ctx.accounts.usdc_from_ata.to_account_info(),  
         to: ctx.accounts.usdc_keeper.to_account_info(),  
-        authority: ctx.accounts.signer.to_account_info(),  
+        authority: ctx.accounts.payer.to_account_info(),  
     };
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
@@ -74,7 +74,7 @@ pub struct MintTokens<'info> {
         seeds = [USDC_SEED],
         bump,
         token::mint = usdc_mint,
-        token::authority = signer,
+        token::authority = payer,
         token::token_program = token_program,
     )]
     pub usdc_keeper: Account<'info, TokenAccount>,
@@ -91,13 +91,12 @@ pub struct MintTokens<'info> {
     #[account(
         mut,
         associated_token::mint = usdc_mint,
-        associated_token::authority = signer,
+        associated_token::authority = payer,
         associated_token::token_program = token_program,
     )]
     pub usdc_from_ata: Account<'info, TokenAccount>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
     pub token_program: Program<'info, Token>,
     pub token_program2022: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,

@@ -57,7 +57,7 @@ pub struct BurnTokens<'info> {
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,
 
     #[account(
-        address = USDC_MINT_ADDRESS_MAINNET,
+        address = USDC_MINT_ADDRESS,
         mint::token_program = token_program,
     )]
     pub usdc_mint: Account<'info, Mint>,
@@ -89,7 +89,6 @@ pub struct BurnTokens<'info> {
     )]
     pub usdc_to_ata: Account<'info, TokenAccount>,
 
-    pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub token_program2022: Interface<'info, TokenInterface>,

@@ -90,12 +90,12 @@ describe("Rewards Test", () => {
       owner: wallet.publicKey,
     });
 
-    let initialSpreeBalance: number;
+    let initialBalance: number;
     try {
-      initialSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+      initialBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     } catch {
       // Token account not yet initiated has 0 balance
-      initialSpreeBalance = 0;
+      initialBalance = 0;
     }
 
     const usdcFromBalance = (await connection.getTokenAccountBalance(usdcFromAta)).value.uiAmount;
@@ -129,7 +129,7 @@ describe("Rewards Test", () => {
 
     const postBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
-      initialSpreeBalance + mintAmount,
+      initialBalance + mintAmount,
       "Compare SP balances, it must be equal"
     );
 
@@ -154,7 +154,7 @@ describe("Rewards Test", () => {
       owner: wallet.publicKey,
     });
 
-    const initialSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const initialBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     const initialSupply = (await connection.getTokenSupply(mint)).value.uiAmount;
     const usdcFromBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
     const usdcToBalance = (await connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
@@ -182,10 +182,10 @@ describe("Rewards Test", () => {
     const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
     console.log("Signature", sig);
 
-    const postSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const postBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
-      initialSpreeBalance - burnAmount,
-      postSpreeBalance,
+      initialBalance - burnAmount,
+      postBalance,
       "Compare SP balances, it must be equal"
     );
 
