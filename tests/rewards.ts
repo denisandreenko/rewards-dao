@@ -9,7 +9,14 @@ import {
   TOKEN_PROGRAM_ID 
 } from '@solana/spl-token';
 import { sendAndConfirmTransaction } from "@solana/web3.js";
-import * as web3 from "@solana/web3.js";
+import * as borsh from "@coral-xyz/borsh";
+import { 
+  metadata,
+  TOKEN_2022_SEED,
+  FEES_SEED,
+  USDC_SEED,
+  USDC_MINT_ADDRESS_DEVNET,
+} from '../utils/constants';
 
 describe("Rewards Test", () => {
   const provider = anchor.AnchorProvider.env();
@@ -19,25 +26,33 @@ describe("Rewards Test", () => {
   const connection = program.provider.connection;
   const wallet = provider.wallet as anchor.Wallet;
 
-  const metadata = {
-    name: "Rewards Token",
-    symbol: "RWD",
-    uri: "https://devnet.irys.xyz/71M9GquPesJ9LyiGiJKFxveood8kY6GqHP92GS2YvQrE",
-    decimals: 6,
+  // TODO: change to ATAs
+  const feeCollector1 = anchor.web3.Keypair.generate();
+  const feeCollector2 = anchor.web3.Keypair.generate();
+
+  const initFeesArgs = {
+    mintFeeBps: 100,
+    transferFeeBps: 100,
+    redemptionFeeBps: 100,
+    feeCollector: feeCollector1.publicKey,
   }
 
-  const USDC_SEED = "usdc";
-  const USDC_MINT_ADDRESS_DEVNET = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+  const updateFeesArgs = {
+    mintFeeBps: 200,
+    transferFeeBps: null, // Should not update
+    redemptionFeeBps: 100,
+    feeCollector: feeCollector2.publicKey,
+  }
 
   const usdcMint = new anchor.web3.PublicKey(USDC_MINT_ADDRESS_DEVNET);
-
-  const payer = program.provider.publicKey;
 
   const mintAmount = 10;
   const burnAmount = 5;
 
   const [mint] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("token-2022")],
+    [
+      Buffer.from(TOKEN_2022_SEED)
+    ],
     program.programId
   );
 
@@ -58,7 +73,14 @@ describe("Rewards Test", () => {
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
-  it("Is initialized!", async () => {
+  const [fees] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from(FEES_SEED)
+    ],
+    program.programId
+  );
+
+  it("Initialize token", async () => {
     const ix = await program.methods
       .initializeToken(metadata)
       .accountsStrict({
@@ -84,18 +106,91 @@ describe("Rewards Test", () => {
     assert(newUSDCKeeperInfo, "USDC keeper should be initialized.");
   });
 
-  it("mint tokens", async () => {
+  it("Initialize fees", async () => {
+    const feesInfo = await connection.getAccountInfo(fees);
+    if (feesInfo) {
+      return; // Do not attempt to initialize if already initialized
+    }
+    console.log("Fees account not found. Initializing...");
+
+    const initFeesAccountSchema = borsh.struct([
+      borsh.u64("discriminator"),
+      borsh.u16("mintFeeBps"),
+      borsh.u16("transferFeeBps"),
+      borsh.u16("redemtionFeeBps"),
+      borsh.publicKey("feeCollector"),
+    ]);
+
+    const tx = new anchor.web3.Transaction();
+
+    const ix = await program.methods
+      .initializeFees(initFeesArgs)
+      .accountsStrict({
+        signer: wallet.publicKey,
+        fees,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .instruction();
+
+      tx.add(ix);
+
+      const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
+      console.log("Signature:", sig);
+
+      const newFeesInfo = await connection.getAccountInfo(fees);
+      assert(newFeesInfo, "Fees should be initialized.");
+
+      const initFeesData = initFeesAccountSchema.decode(newFeesInfo.data);
+      assert.equal(initFeesData.mintFeeBps, initFeesArgs.mintFeeBps, "Mint fee mismatch");
+      assert.equal(initFeesData.transferFeeBps, initFeesArgs.transferFeeBps, "Transfer fee mismatch");
+      assert.equal(initFeesData.redemtionFeeBps, initFeesArgs.redemptionFeeBps, "Redemption fee mismatch");
+      assert.equal(initFeesData.feeCollector.toString(), initFeesArgs.feeCollector.toString(), "Fee collector mismatch");
+  });
+
+  it("Update fees", async () => {  
+    const updateFeesAccountSchema = borsh.struct([
+      borsh.u64("discriminator"),
+      borsh.u16("mint_fee_bps"),
+      borsh.u16("transfer_fee_bps"),
+      borsh.u16("redeem_fee_bps"),
+      borsh.publicKey("fee_collector"),
+    ]);
+
+    const tx = new anchor.web3.Transaction();
+
+    const ix = await program.methods
+      .updateFees(updateFeesArgs)
+      .accountsStrict({
+        signer: wallet.publicKey,
+        fees,
+      })
+      .instruction();
+
+      tx.add(ix);
+
+      const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
+      console.log("Signature:", sig);
+
+      const feesInfo = await connection.getAccountInfo(fees);
+      const updateFeesData = updateFeesAccountSchema.decode(feesInfo.data);
+      assert.equal(updateFeesData.mint_fee_bps, updateFeesArgs.mintFeeBps, "Mint fee mismatch");
+      assert.equal(updateFeesData.transfer_fee_bps, initFeesArgs.transferFeeBps, "Transfer fee mismatch");
+      assert.equal(updateFeesData.redeem_fee_bps, updateFeesArgs.redemptionFeeBps, "Redemption fee mismatch");
+      assert.equal(updateFeesArgs.feeCollector.toString(), updateFeesData.fee_collector.toString(), "Fee collector mismatch");
+  });
+
+  it("Mint tokens", async () => {
     const usdcFromAta = await anchor.utils.token.associatedAddress({
       mint: usdcMint,
       owner: wallet.publicKey,
     });
 
-    let initialSpreeBalance: number;
+    let initialRWDBalance: number;
     try {
-      initialSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+      initialRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     } catch {
       // Token account not yet initiated has 0 balance
-      initialSpreeBalance = 0;
+      initialRWDBalance = 0;
     }
 
     const usdcFromBalance = (await connection.getTokenAccountBalance(usdcFromAta)).value.uiAmount;
@@ -127,22 +222,23 @@ describe("Rewards Test", () => {
     const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
     console.log("Signature:", sig);
 
-    const postBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
-      initialSpreeBalance + mintAmount,
-      "Compare SP balances, it must be equal"
+      initialRWDBalance + mintAmount,
+      postRWDBalance,
+      "Compare RWD balances, it must be equal"
     );
 
     const usdcFromPostBalance = (await connection.getTokenAccountBalance(usdcFromAta)).value.uiAmount;
     assert.equal(
-      usdcFromBalance - (mintAmount / 10), // 1 USDC = 10 SP
+      usdcFromBalance - (mintAmount / 10),
       usdcFromPostBalance,
       "Compare USDC From balances, it must be equal"
     );
 
     const usdcToPostBalance = (await program.provider.connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
     assert.equal(
-      usdcToBalance + (mintAmount / 10), // 1 USDC = 10 SP
+      usdcToBalance + (mintAmount / 10),
       usdcToPostBalance,
       "Compare USDC To balances, it must be equal"
     );
@@ -154,7 +250,7 @@ describe("Rewards Test", () => {
       owner: wallet.publicKey,
     });
 
-    const initialSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const initialRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     const initialSupply = (await connection.getTokenSupply(mint)).value.uiAmount;
     const usdcFromBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
     const usdcToBalance = (await connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
@@ -182,30 +278,30 @@ describe("Rewards Test", () => {
     const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
     console.log("Signature", sig);
 
-    const postSpreeBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+    const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
-      initialSpreeBalance - burnAmount,
-      postSpreeBalance,
-      "Compare SP balances, it must be equal"
+      initialRWDBalance - burnAmount,
+      postRWDBalance,
+      "Compare RWD balances, it must be equal"
     );
 
     const postSupply = (await connection.getTokenSupply(mint)).value.uiAmount;
     assert.equal(
       initialSupply - burnAmount,
       postSupply,
-      "Compare SP token supply, it must be equal"
+      "Compare RWD supply, it must be equal"
     );
 
     const usdcFromPostBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
     assert.equal(
-      usdcFromBalance - (burnAmount / 10), // 1 USDC = 10 SP
+      usdcFromBalance - (burnAmount / 10),
       usdcFromPostBalance,
       "Compare USDC storage post balances, it must be equal"
     );
 
     const usdcToPostBalance = (await program.provider.connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
     assert.equal(
-      usdcToBalance + (burnAmount / 10), // 1 USDC = 10 SP
+      usdcToBalance + (burnAmount / 10),
       usdcToPostBalance,
       "Compare USDC To post balances, it must be equal"
     );

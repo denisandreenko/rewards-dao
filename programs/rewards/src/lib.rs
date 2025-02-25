@@ -60,7 +60,7 @@ pub mod rewards {
     }
 
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
-        // USDC - 6 decimals | SP - 6 decimals
+        // USDC - 6 decimals | RWD - 6 decimals
         let usdc_amount = amount / 10; // 1 USDC for 10 tokens
 
         _charge_usdc(&ctx, usdc_amount)?;
@@ -69,7 +69,21 @@ pub mod rewards {
     }
 
     pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+        // USDC - 6 decimals | RWD - 6 decimals
+        let usdc_amount = amount / 10; // 1 USDC for 10 tokens
+
+        // Transfer USDC from the storage account to the user 
+        _release_usdc(&ctx, usdc_amount)?;
+
         _burn_tokens(ctx, amount)
+    }
+
+    pub fn initialize_fees(ctx: Context<InitializeFees>, args: InitFeesArgs) -> Result<()> {
+        _initialize_fees(ctx, args)
+    }
+
+    pub fn update_fees(ctx: Context<UpdateFees>, args: UpdateFeesArgs) -> Result<()> {
+        _update_fees(ctx, args)
     }
 }
 
