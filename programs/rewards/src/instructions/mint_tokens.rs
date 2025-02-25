@@ -1,10 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{
-    TOKEN_2022_SEED,
-    USDC_SEED,
-    USDC_MINT_ADDRESS_DEVNET,
-};
-
+use crate::constants::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{
