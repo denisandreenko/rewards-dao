@@ -15,7 +15,8 @@ import {
   TOKEN_2022_SEED,
   FEES_SEED,
   USDC_SEED,
-  USDC_MINT_ADDRESS_DEVNET,
+  USDC_MINT_ADDRESS,
+  RWD_DECIMALS,
 } from '../utils/constants';
 
 describe("Rewards Test", () => {
@@ -44,7 +45,7 @@ describe("Rewards Test", () => {
     feeCollector: feeCollector2.publicKey,
   }
 
-  const usdcMint = new anchor.web3.PublicKey(USDC_MINT_ADDRESS_DEVNET);
+  const usdcMint = new anchor.web3.PublicKey(USDC_MINT_ADDRESS);
 
   const mintAmount = 10;
   const burnAmount = 5;
@@ -202,7 +203,7 @@ describe("Rewards Test", () => {
     const tx = new anchor.web3.Transaction();
 
     const ix = await program.methods
-      .mintTokens(new anchor.BN(mintAmount * 10 ** metadata.decimals))
+      .mintTokens(new anchor.BN(mintAmount * 10 ** RWD_DECIMALS))
       .accountsStrict({
         signer: wallet.publicKey,
         mint,
@@ -258,7 +259,7 @@ describe("Rewards Test", () => {
     const tx = new anchor.web3.Transaction();
 
     const ix = await program.methods
-      .burnTokens(new anchor.BN(burnAmount * 10 ** metadata.decimals))
+      .burnTokens(new anchor.BN(burnAmount * 10 ** RWD_DECIMALS))
       .accountsStrict({
         signer: wallet.publicKey,
         mint,
