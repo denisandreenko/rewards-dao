@@ -112,7 +112,6 @@ describe("Rewards Test", () => {
     if (feesInfo) {
       return; // Do not attempt to initialize if already initialized
     }
-    console.log("Fees account not found. Initializing...");
 
     const initFeesAccountSchema = borsh.struct([
       borsh.u64("discriminator"),
@@ -121,8 +120,6 @@ describe("Rewards Test", () => {
       borsh.u16("redemtionFeeBps"),
       borsh.publicKey("feeCollector"),
     ]);
-
-    const tx = new anchor.web3.Transaction();
 
     const ix = await program.methods
       .initializeFees(initFeesArgs)
@@ -133,10 +130,10 @@ describe("Rewards Test", () => {
       })
       .instruction();
 
-      tx.add(ix);
+      const tx = new anchor.web3.Transaction().add(ix);
 
       const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-      console.log("Signature:", sig);
+      assert.ok(sig);
 
       const newFeesInfo = await connection.getAccountInfo(fees);
       assert(newFeesInfo, "Fees should be initialized.");
@@ -157,8 +154,6 @@ describe("Rewards Test", () => {
       borsh.publicKey("fee_collector"),
     ]);
 
-    const tx = new anchor.web3.Transaction();
-
     const ix = await program.methods
       .updateFees(updateFeesArgs)
       .accountsStrict({
@@ -167,10 +162,10 @@ describe("Rewards Test", () => {
       })
       .instruction();
 
-      tx.add(ix);
+      const tx = new anchor.web3.Transaction().add(ix);
 
       const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-      console.log("Signature:", sig);
+      assert.ok(sig);
 
       const feesInfo = await connection.getAccountInfo(fees);
       const updateFeesData = updateFeesAccountSchema.decode(feesInfo.data);
@@ -200,7 +195,8 @@ describe("Rewards Test", () => {
     const usdcToBalance = (await connection.getTokenAccountBalance(usdcKeeper)).value.uiAmount;
     console.log("USDC To balance: ", usdcToBalance);
 
-    const tx = new anchor.web3.Transaction();
+    // Fetch the current fee collector
+    const feesAccount = await program.account.fees.fetch(fees);
 
     const ix = await program.methods
       .mintTokens(new anchor.BN(mintAmount * 10 ** RWD_DECIMALS))
@@ -211,6 +207,8 @@ describe("Rewards Test", () => {
         usdcKeeper,
         toAta: payerATA,
         usdcFromAta,
+        fees: fees,
+        feeCollector: feesAccount.feeCollector,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         tokenProgram2022: TOKEN_2022_PROGRAM_ID,
@@ -218,10 +216,10 @@ describe("Rewards Test", () => {
       })
       .instruction();
 
-    tx.add(ix);
+    const tx = new anchor.web3.Transaction().add(ix);
 
     const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-    console.log("Signature:", sig);
+    assert.ok(sig);
 
     const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(
@@ -258,6 +256,9 @@ describe("Rewards Test", () => {
 
     const tx = new anchor.web3.Transaction();
 
+    // Fetch the current fee collector
+    const feesAccount = await program.account.fees.fetch(fees);
+
     const ix = await program.methods
       .burnTokens(new anchor.BN(burnAmount * 10 ** RWD_DECIMALS))
       .accountsStrict({
@@ -267,6 +268,8 @@ describe("Rewards Test", () => {
         usdcKeeper,
         fromAta: payerATA,
         usdcToAta,
+        fees: fees,
+        feeCollector: feesAccount.feeCollector,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         tokenProgram2022: TOKEN_2022_PROGRAM_ID,
@@ -277,7 +280,7 @@ describe("Rewards Test", () => {
     tx.add(ix);
 
     const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-    console.log("Signature", sig);
+    assert.ok(sig);
 
     const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
     assert.equal(

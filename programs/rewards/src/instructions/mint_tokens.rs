@@ -17,8 +17,32 @@ use anchor_spl::{
     },
 };
 
-pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
-    // Transfer USDC to the specified account  
+pub fn _mint_tokens_with_fees(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
+    let freeze_state = &ctx.accounts.freeze_state;
+    check_freeze_state(&freeze_state, "mint")?;
+
+    let fee = amount * ctx.accounts.fees.mint_fee_bps as u64 / 10000;
+
+    let usdc_amount = amount / RWD_PER_USDC;
+
+    // Transfer USDC to the vault 
+    _charge_usdc(ctx, usdc_amount)?;
+
+    _mint_tokens(ctx, fee, true)?;
+    _mint_tokens(ctx, amount - fee, false)?;
+
+    emit!(MintEvent {
+        minter: ctx.accounts.signer.key(),
+        receiver: ctx.accounts.to_ata.key(),
+        amount_minted: amount - fee,
+        fee_amount: fee,
+        usdc_spent: usdc_amount,
+    });
+
+    Ok(())
+}
+
+pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> { 
     let cpi_accounts = token_interface::TransferChecked {
         mint: ctx.accounts.usdc_mint.to_account_info(),
         from: ctx.accounts.usdc_from_ata.to_account_info(),  
@@ -28,16 +52,20 @@ pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
 
-    token_interface::transfer_checked(cpi_context, amount, 6)?;
+    token_interface::transfer_checked(cpi_context, amount, USDC_DECIMALS)?;
     Ok(())
 }
 
-pub fn _mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+pub fn _mint_tokens(ctx: &Context<MintTokens>, amount: u64, is_fee_collector: bool) -> Result<()> {
     let mut cpi_accounts = MintTo {
         mint: ctx.accounts.mint.to_account_info(),
         to: ctx.accounts.to_ata.to_account_info(),
-        authority: ctx.accounts.payer.to_account_info(),
+        authority: ctx.accounts.signer.to_account_info(),
     };
+
+    if is_fee_collector {
+        cpi_accounts.to = ctx.accounts.fee_collector.to_account_info();
+    }
 
     let cpi_program = ctx.accounts.token_program2022.to_account_info();
     let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
@@ -91,8 +119,20 @@ pub struct MintTokens<'info> {
     )]
     pub usdc_from_ata: Account<'info, TokenAccount>,
 
+    #[account(
+        mut,
+        seeds = [FEES_SEED],
+        bump
+    )]
+    pub fees: Account<'info, Fees>,
+
+    #[account(
+        mut,
+        address = fees.fee_collector,
+    )]
+    pub fee_collector: InterfaceAccount<'info, TokenAccount2022>,
+
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
     pub token_program: Program<'info, Token>,
     pub token_program2022: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
