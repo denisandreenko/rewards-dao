@@ -19,11 +19,14 @@ import {
   USDC_MINT_ADDRESS,
   RWD_DECIMALS,
   FREEZE_SEED,
+  RWD_PER_USDC,
 } from '../utils/constants';
 import { makeKeypairs, airdropIfRequired } from "@solana-developers/helpers"
-import { findATAs, findPDAs, getTokenBalance } from "../utils/setup";
+import { calcFee, findATAs, findPDAs, getTokenBalance, toBN } from "../utils/setup";
 import { initializeFreeze } from "../utils/initialization";
 import { getFreezeState } from "../utils/freezeOps";
+import { mintTokens } from "../utils/mint";
+import { burnTokens } from "../utils/burn";
 
 describe("Rewards Test", () => {
   const provider = anchor.AnchorProvider.env();
@@ -73,8 +76,8 @@ describe("Rewards Test", () => {
 
   const usdcMint = new anchor.web3.PublicKey(USDC_MINT_ADDRESS);
 
-  const mintAmount = 10;
-  const burnAmount = 5;
+  const mintAmount = toBN(20, RWD_DECIMALS);
+  const burnAmount = toBN(3, RWD_DECIMALS);
 
 
   const [payerATA] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -200,160 +203,116 @@ describe("Rewards Test", () => {
     assert.ok(!freezeState.freezeBurn, "Burning should be allowed.");
   })
 
-  it("Mint tokens", async () => {
+  it("Mint Token to payer", async () => {
     const usdcFromAta = await anchor.utils.token.associatedAddress({
       mint: usdcMint,
       owner: wallet.publicKey,
     });
 
-    let initialRWDBalance: number;
+    let initialRWDBalance: anchor.BN;
     try {
-      initialRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
+      initialRWDBalance = await getTokenBalance(connection, payerATA);
     } catch {
       // Token account not yet initiated has 0 balance
-      initialRWDBalance = 0;
+      initialRWDBalance = new anchor.BN(0);
     }
 
-    const usdcFromBalance = (await connection.getTokenAccountBalance(usdcFromAta)).value.uiAmount;
-    console.log("USDC From ATA balance: ", usdcFromBalance);
+    const usdcFromBalance = await getTokenBalance(connection, usdcFromAta);
+    const usdcToBalance = await getTokenBalance(connection, pdaMap.usdcKeeper);
 
-    const usdcToBalance = (await connection.getTokenAccountBalance(pdaMap.usdcKeeper)).value.uiAmount;
-    console.log("USDC To balance: ", usdcToBalance);
-
-
-    const tx = new anchor.web3.Transaction();
-    // Ensure the fee collector ATA exists
-    let feeCollectorBalance;
+    let initialFeeCollectorBalance: anchor.BN;
     try {
-      feeCollectorBalance = await getTokenBalance(connection, feeCollector2ATA);
+      initialFeeCollectorBalance = await getTokenBalance(connection, feeCollector2ATA);
     } catch {
-      // Fee collector account doesn't exist, so initialize it
-      tx.add(
-        createAssociatedTokenAccountInstruction(
-          wallet.publicKey,
-          feeCollector2ATA,
-          feeCollector2.publicKey,
-          pdaMap.mint,
-          TOKEN_2022_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      );
+      // Token account not yet initiated has 0 balance
+      initialFeeCollectorBalance = new anchor.BN(0);
     }
 
-    // Fetch the current fee collector
-    const feesAccount = await program.account.fees.fetch(pdaMap.fees);
-
-    const ix = await program.methods
-      .mintTokens(new anchor.BN(mintAmount * 10 ** RWD_DECIMALS))
-      .accountsStrict({
-        payer: wallet.publicKey,
-        mint: pdaMap.mint,
-        usdcMint,
-        usdcKeeper: pdaMap.usdcKeeper,
-        toAta: payerATA,
-        usdcFromAta,
-        fees: pdaMap.fees,
-        feeCollector: feesAccount.feeCollector,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        freezeState: pdaMap.freezeState,
-      })
-      .instruction();
-
-    tx.add(ix);
-
-    const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-    assert.ok(sig);
-
-    const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
-    assert.equal(
-      initialRWDBalance + mintAmount,
-      postRWDBalance,
-      "Compare RWD balances, it must be equal"
+    await mintTokens(
+      program,
+      wallet,
+      mintAmount,
+      payerATA,
+      pdaMap,
+      feeCollector2.publicKey,
+      feeCollector2ATA,
+      usdcMint
     );
 
-    const usdcFromPostBalance = (await connection.getTokenAccountBalance(usdcFromAta)).value.uiAmount;
-    assert.equal(
-      usdcFromBalance - (mintAmount / 10),
-      usdcFromPostBalance,
-      "Compare USDC From balances, it must be equal"
+    const fee = calcFee(mintAmount, updateFeesArgs.mintFeeBps);
+    const mintAmountAfterFees = mintAmount.sub(fee);
+
+    const postFeeCollectorBalance = await getTokenBalance(connection, feeCollector2ATA);
+    assert.ok(
+      postFeeCollectorBalance.eq(initialFeeCollectorBalance.add(fee)),
+      "Fee collector balance should increase correctly"
     );
 
-    const usdcToPostBalance = (await program.provider.connection.getTokenAccountBalance(pdaMap.usdcKeeper)).value.uiAmount;
-    assert.equal(
-      usdcToBalance + (mintAmount / 10),
-      usdcToPostBalance,
-      "Compare USDC To balances, it must be equal"
+    const postRWDBalance = await getTokenBalance(connection, payerATA);
+    assert.ok(
+      postRWDBalance.eq(initialRWDBalance.add(mintAmountAfterFees)),
+      "RWD balances should match after minting"
+    );
+
+    const usdcFromPostBalance = await getTokenBalance(connection, usdcFromAta);
+    assert.ok(
+      usdcFromPostBalance.eq(usdcFromBalance.sub(mintAmount.div(new anchor.BN(RWD_PER_USDC)))),
+      "USDC From balance should decrease correctly"
+    );
+
+    const usdcToPostBalance = await getTokenBalance(connection, pdaMap.usdcKeeper);
+    assert.ok(
+      usdcToPostBalance.eq(usdcToBalance.add(mintAmount.div(new anchor.BN(RWD_PER_USDC)))),
+      "USDC To balance should increase correctly"
     );
   });
 
-  it("Burn tokens", async () => {
+  it("Burn Token", async () => {
     const usdcToAta = await anchor.utils.token.associatedAddress({
       mint: usdcMint,
       owner: wallet.publicKey,
     });
 
-    const initialRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
-    const initialSupply = (await connection.getTokenSupply(pdaMap.mint)).value.uiAmount;
-    const usdcFromBalance = (await connection.getTokenAccountBalance(pdaMap.usdcKeeper)).value.uiAmount;
-    const usdcToBalance = (await connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
+    const initialRWDBalance = await getTokenBalance(connection, payerATA);
+    const initialSupply = new anchor.BN((await connection.getTokenSupply(pdaMap.mint)).value.amount);
+    const usdcFromBalance = await getTokenBalance(connection, pdaMap.usdcKeeper);
+    const usdcToBalance = await getTokenBalance(connection, usdcToAta);
+    const feeCollectorBalance = await getTokenBalance(connection, feeCollector2ATA);
 
-    const tx = new anchor.web3.Transaction();
+    const fee = calcFee(burnAmount, updateFeesArgs.redemptionFeeBps);
 
-    // Fetch the current fee collector
-    const feesAccount = await program.account.fees.fetch(fees);
+    const sig = await burnTokens(program, wallet, burnAmount, payerATA, feeCollector2ATA, pdaMap, usdcMint);
+    console.log(sig);
 
-    const ix = await program.methods
-      .burnTokens(new anchor.BN(burnAmount * 10 ** RWD_DECIMALS))
-      .accountsStrict({
-        signer: wallet.publicKey,
-        mint: pdaMap.mint,
-        usdcMint,
-        usdcKeeper: pdaMap.usdcKeeper,
-        fromAta: payerATA,
-        usdcToAta,
-        fees: fees,
-        feeCollector: feesAccount.feeCollector,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID
-      })
-      .instruction();
-
-    tx.add(ix);
-
-    const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-    assert.ok(sig);
-
-    const postRWDBalance = (await connection.getTokenAccountBalance(payerATA)).value.uiAmount;
-    assert.equal(
-      initialRWDBalance - burnAmount,
-      postRWDBalance,
-      "Compare RWD balances, it must be equal"
+    const postRWDBalance = await getTokenBalance(connection, payerATA);
+    assert.ok(
+      postRWDBalance.eq(initialRWDBalance.sub(burnAmount)),
+      "SP balances should match after burning"
     );
 
-    const postSupply = (await connection.getTokenSupply(pdaMap.mint)).value.uiAmount;
-    assert.equal(
-      initialSupply - burnAmount,
-      postSupply,
-      "Compare RWD supply, it must be equal"
+    const postFeeCollectorBalance = await getTokenBalance(connection, feeCollector2ATA);
+    assert.ok(
+      feeCollectorBalance.add(fee).eq(postFeeCollectorBalance),
+      "Fee collector post balance should increase correctly"
     );
 
-    const usdcFromPostBalance = (await connection.getTokenAccountBalance(pdaMap.usdcKeeper)).value.uiAmount;
-    assert.equal(
-      usdcFromBalance - (burnAmount / 10),
-      usdcFromPostBalance,
-      "Compare USDC storage post balances, it must be equal"
+    const postSupply = new anchor.BN((await connection.getTokenSupply(pdaMap.mint)).value.amount);
+    assert.ok(
+      postSupply.eq(initialSupply.sub(burnAmount.sub(fee))),
+      "SP token supply should decrease correctly"
     );
 
-    const usdcToPostBalance = (await program.provider.connection.getTokenAccountBalance(usdcToAta)).value.uiAmount;
-    assert.equal(
-      usdcToBalance + (burnAmount / 10),
-      usdcToPostBalance,
-      "Compare USDC To post balances, it must be equal"
+    const usdcFromPostBalance = await getTokenBalance(connection, pdaMap.usdcKeeper);
+    const burnAmountWithoutFee = burnAmount.sub(fee);
+    assert.ok(
+      usdcFromPostBalance.eq(usdcFromBalance.sub(burnAmountWithoutFee.div(new anchor.BN(RWD_PER_USDC)))),
+      "USDC storage post balance should decrease correctly"
+    );
+
+    const usdcToPostBalance = await getTokenBalance(connection, usdcToAta);
+    assert.ok(
+      usdcToPostBalance.eq(usdcToBalance.add(burnAmountWithoutFee.div(new anchor.BN(RWD_PER_USDC)))),
+      "USDC To balance should increase correctly"
     );
   });
 });

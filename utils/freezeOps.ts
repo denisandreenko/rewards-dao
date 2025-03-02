@@ -6,7 +6,7 @@ import { TransferHook } from "../target/types/transfer_hook";
 
 /**
  * **FREEZE an operation (All, Mint, Burn)**
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {PublicKey} mint - The mint account whose freeze state is being modified.
  * @param {anchor.Wallet} wallet - The admin wallet signing the transaction.
  * @param {FreezeTarget} target - Which operation to freeze.
@@ -40,7 +40,7 @@ export const freezeOperation = async (
 
 /**
  * **FREEZE an operation Transfer**
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {PublicKey} mint - The mint account whose freeze state is being modified.
  * @param {anchor.Wallet} wallet - The admin wallet signing the transaction.
  * @param {FreezeTarget} target - Which operation to freeze.
@@ -72,7 +72,7 @@ export const freezeTransferOperation = async (
 
 /**
  * **UNFREEZE an operation (All, Mint, Burn)**
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {PublicKey} mint - The mint account whose freeze state is being modified.
  * @param {anchor.Wallet} wallet - The admin wallet signing the transaction.
  * @param {FreezeTarget} target - Which operation to unfreeze.
@@ -104,7 +104,7 @@ export const unfreezeOperation = async (
 };
 /**
  * **UNFREEZE operation Transfer**
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {PublicKey} mint - The mint account whose freeze state is being modified.
  * @param {anchor.Wallet} wallet - The admin wallet signing the transaction.
  * @param {FreezeTarget} target - Which operation to unfreeze.
@@ -136,7 +136,7 @@ export const unfreezeTransferOperation = async (
 
 /**
  * Fetches the current freeze state from the on-chain PDA.
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {Record<string, PublicKey>} pdaMap - The mint account whose freeze state is being checked.
  * @returns {Promise<any>} - Freeze state data.
  */
@@ -155,7 +155,7 @@ export const getFreezeState = async (
 
 /**
  * Fetches the current transfer freeze state from whitelistpda
- * @param {anchor.Program<SpreePoints>} program - The Anchor program instance.
+ * @param {anchor.Program<Rewards>} program - The Anchor program instance.
  * @param {Record<string, PublicKey>} pdaMap - The mint account whose freeze state is being checked.
  * @returns {Promise<any>} - Freeze state data.
  */
