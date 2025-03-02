@@ -9,6 +9,9 @@ pub const USDC_SEED: &[u8] = b"usdc";
 #[constant]
 pub const FEES_SEED: &[u8] = b"fees";
 
+#[constant]
+pub const FREEZE_SEED: &[u8] = b"freeze";
+
 // Mainnet - EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 // Devnet - 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
 #[constant]

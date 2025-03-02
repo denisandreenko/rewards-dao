@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::{FreezeState, Fees, check_freeze_state, BurnEvent};
+
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{
@@ -12,7 +14,7 @@ use anchor_spl::{
         self,
         Burn,
         Mint as Mint2022,
-        TokenAccount as TokenAccount2022,
+        TokenAccount as TokenAccount2022, MintTo,
         TokenInterface
     },
 };
@@ -93,7 +95,7 @@ pub struct BurnTokens<'info> {
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,
 
     #[account(
-        address = USDC_MINT_ADDRESS_MAINNET,
+        address = USDC_MINT_ADDRESS,
         mint::token_program = token_program,
     )]
     pub usdc_mint: Account<'info, Mint>,
