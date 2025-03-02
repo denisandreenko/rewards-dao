@@ -17,6 +17,28 @@ use anchor_spl::{
     },
 };
 
+pub fn _burn_tokens_with_fees(ctx: &Context<BurnTokens>, amount: u64) -> Result<()> {
+    let fee = amount * ctx.accounts.fees.redemption_fee_bps as u64 / 10000;
+
+    let usdc_amount = (amount - fee) / RWD_PER_USDC;
+
+    // Transfer USDC from the vault to the user 
+    _release_usdc(ctx, usdc_amount)?;
+ 
+    _mint_fee(ctx, fee)?;
+    _burn_tokens(ctx, amount)?;
+
+    emit!(BurnEvent {
+        from_address: ctx.accounts.from_ata.key(),
+        amount_burned: amount,
+        fee_amount: fee,
+        usdc_amount,
+        fee_collector: ctx.accounts.fee_collector.key(),
+    });
+
+    Ok(())
+}
+
 pub fn _release_usdc(ctx: &Context<BurnTokens>, amount: u64) -> Result<()> {
     let cpi_accounts = token_interface::TransferChecked {
         mint: ctx.accounts.usdc_mint.to_account_info(),
@@ -31,7 +53,21 @@ pub fn _release_usdc(ctx: &Context<BurnTokens>, amount: u64) -> Result<()> {
     Ok(())
 }
 
-pub fn _burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+pub fn _mint_fee(ctx: &Context<BurnTokens>, amount: u64) -> Result<()> {
+    let cpi_accounts = MintTo {
+        mint: ctx.accounts.mint.to_account_info(),
+        to: ctx.accounts.fee_collector.to_account_info(),
+        authority: ctx.accounts.signer.to_account_info(),
+    };
+
+    let cpi_program = ctx.accounts.token_program2022.to_account_info();
+    let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+
+    token_interface::mint_to(cpi_context, amount)?;
+    Ok(())
+}
+
+pub fn _burn_tokens(ctx: &Context<BurnTokens>, amount: u64) -> Result<()> {
     let cpi_accounts = Burn {
         authority: ctx.accounts.signer.to_account_info(),
         from: ctx.accounts.from_ata.to_account_info(),
@@ -89,7 +125,19 @@ pub struct BurnTokens<'info> {
     )]
     pub usdc_to_ata: Account<'info, TokenAccount>,
 
-    pub token_program: Interface<'info, TokenInterface>,
+    #[account(
+        mut,
+        seeds = [FEES_SEED],
+        bump
+    )]
+    pub fees: Account<'info, Fees>,
+
+    #[account(
+        mut,
+        address = fees.fee_collector,
+    )]
+    pub fee_collector: InterfaceAccount<'info, TokenAccount2022>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub token_program2022: Interface<'info, TokenInterface>,
