@@ -21,6 +21,6 @@ pub const USDC_MINT_ADDRESS: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wE
 pub const USDC_DECIMALS: u8 = 6;
 
 #[constant]
-pub const RWD_PER_USDC: u64 = 10;
+pub const RWD_PER_USDC: u64 = 100;
 
 pub const DISCRIMINATOR: usize = 8;
