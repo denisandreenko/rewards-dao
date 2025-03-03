@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::events::*;
+use crate::{FreezeState, Fees, check_freeze_state, BurnEvent};
+
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{
@@ -32,7 +35,7 @@ pub fn _mint_tokens_with_fees(ctx: &Context<MintTokens>, amount: u64) -> Result<
     _mint_tokens(ctx, amount - fee, false)?;
 
     emit!(MintEvent {
-        minter: ctx.accounts.signer.key(),
+        minter: ctx.accounts.payer.key(),
         receiver: ctx.accounts.to_ata.key(),
         amount_minted: amount - fee,
         fee_amount: fee,
@@ -47,7 +50,7 @@ pub fn _charge_usdc(ctx: &Context<MintTokens>, amount: u64) -> Result<()> {
         mint: ctx.accounts.usdc_mint.to_account_info(),
         from: ctx.accounts.usdc_from_ata.to_account_info(),  
         to: ctx.accounts.usdc_keeper.to_account_info(),  
-        authority: ctx.accounts.signer.to_account_info(),  
+        authority: ctx.accounts.payer.to_account_info(),  
     };
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
@@ -60,7 +63,7 @@ pub fn _mint_tokens(ctx: &Context<MintTokens>, amount: u64, is_fee_collector: bo
     let mut cpi_accounts = MintTo {
         mint: ctx.accounts.mint.to_account_info(),
         to: ctx.accounts.to_ata.to_account_info(),
-        authority: ctx.accounts.signer.to_account_info(),
+        authority: ctx.accounts.payer.to_account_info(),
     };
 
     if is_fee_collector {
@@ -87,7 +90,7 @@ pub struct MintTokens<'info> {
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,
 
     #[account(
-        address = USDC_MINT_ADDRESS_DEVNET,
+        address = USDC_MINT_ADDRESS,
         mint::token_program = token_program,
     )]
     pub usdc_mint: Account<'info, Mint>,
@@ -97,7 +100,7 @@ pub struct MintTokens<'info> {
         seeds = [USDC_SEED],
         bump,
         token::mint = usdc_mint,
-        token::authority = signer,
+        token::authority = payer,
         token::token_program = token_program,
     )]
     pub usdc_keeper: Account<'info, TokenAccount>,
@@ -114,7 +117,7 @@ pub struct MintTokens<'info> {
     #[account(
         mut,
         associated_token::mint = usdc_mint,
-        associated_token::authority = signer,
+        associated_token::authority = payer,
         associated_token::token_program = token_program,
     )]
     pub usdc_from_ata: Account<'info, TokenAccount>,
@@ -131,6 +134,13 @@ pub struct MintTokens<'info> {
         address = fees.fee_collector,
     )]
     pub fee_collector: InterfaceAccount<'info, TokenAccount2022>,
+
+    #[account(
+        mut,
+        seeds = [FREEZE_SEED], 
+        bump,
+    )]
+    pub freeze_state: Account<'info, FreezeState>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

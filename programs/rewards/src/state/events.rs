@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::FreezeTarget;
 
 #[event]
 pub struct MintEvent {
@@ -24,4 +25,11 @@ pub struct UpdateFeesEvent {
     pub transfer_fee_bps: u16,
     pub redemption_fee_bps: u16,
     pub fee_collector: Pubkey,
+}
+
+#[event]
+pub struct FreezeStateChangedEvent {
+    pub authority: Pubkey,
+    pub target: FreezeTarget,
+    pub is_frozen: bool,
 }

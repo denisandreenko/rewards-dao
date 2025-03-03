@@ -56,6 +56,8 @@ pub struct InitToken<'info> {
         mint::token_program = token_program2022,
         extensions::metadata_pointer::authority = signer,
         extensions::metadata_pointer::metadata_address = mint,
+        extensions::transfer_hook::authority = signer,
+        extensions::transfer_hook::program_id = args.transfer_hook_program_id,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint2022>>,
 
@@ -87,4 +89,5 @@ pub struct InitTokenAccountArgs {
     pub symbol: String,
     pub uri: String,
     pub decimals: u8,
+    pub transfer_hook_program_id: Pubkey,
 }
