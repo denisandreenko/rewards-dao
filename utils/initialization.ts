@@ -153,7 +153,6 @@ export const initializeExtraAccountMetaList = async (
             tokenProgram: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
-            whiteList: pdaMap.whitelist,
         })
         .instruction();
 
@@ -182,5 +181,5 @@ export const initializeAll = async (
     await initializeMint(mint_program, wallet, usdcMint, pdaMap);
     await initializeFreeze(mint_program, wallet, pdaMap);
     await initializeFees(mint_program, wallet, initFeesArgs, pdaMap);
-    // await initializeExtraAccountMetaList(transfer_program, wallet, pdaMap);
+    await initializeExtraAccountMetaList(transfer_program, wallet, pdaMap);
 };
