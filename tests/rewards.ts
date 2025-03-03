@@ -23,7 +23,7 @@ import {
 } from '../utils/constants';
 import { makeKeypairs, airdropIfRequired } from "@solana-developers/helpers"
 import { calcFee, findATAs, findPDAs, getTokenBalance, toBN } from "../utils/setup";
-import { initializeFreeze } from "../utils/initialization";
+import { initializeFreeze, initializeMint } from "../utils/initialization";
 import { getFreezeState } from "../utils/freezeOps";
 import { mintTokens } from "../utils/mint";
 import { burnTokens } from "../utils/burn";
@@ -97,23 +97,7 @@ describe("Rewards Test", () => {
   );
 
   it("Initialize token", async () => {
-    const ix = await program.methods
-      .initializeToken(metadata)
-      .accountsStrict({
-        signer: wallet.publicKey,
-        mint: pdaMap.mint,
-        usdcMint,
-        usdcKeeper: pdaMap.usdcKeeper,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-      })
-      .instruction();
-
-    const tx = new anchor.web3.Transaction().add(ix);
-
-    const sig = await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
-    console.log("Signature:", sig);
+    await initializeMint(program, wallet, usdcMint, pdaMap);
 
     const newMintInfo = await connection.getAccountInfo(pdaMap.mint);
     assert(newMintInfo, "Mint should be initialized.");

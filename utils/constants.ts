@@ -3,6 +3,8 @@ export const RWD_PER_USDC = 100;
 export const TOKEN_2022_SEED = "token-2022";
 export const FEES_SEED = "fees";
 export const USDC_SEED = "usdc";
+export const EXTRA_ACCOUNT_METAS = "extra-account-metas";
+export const USER_WHITELIST_SEED = "user-whitelist";
 export const FREEZE_SEED = "freeze";
 
 
